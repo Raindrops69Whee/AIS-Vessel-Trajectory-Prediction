@@ -1,0 +1,31 @@
+Changes:
+
+config_trAISformer.py:
+		Changed values of "max_epochs", "batch_size" and "n_samples"
+
+trainers.py:
+		Added code block to solve import(and 'not defined') errors:
+			 "from config_trAISformer import Config
+				import os
+				import matplotlib as plt
+				import trAISformer as tf
+				cf = Config()
+				TB_LOG = cf.tb_log
+				if TB_LOG:
+				    from torch.utils.tensorboard import SummaryWriter
+    				tb = SummaryWriter()"
+		Added a try-except loop around lines 270 to 301 to ensure that
+		the code wouldn't throw an error while attempting to access the
+		"test" section of data during the training phase(before it was defined).
+
+trAISformer.py:
+		Added the following line before the training loop even begins(line 54):
+				"Data, aisdatasets, aisdls = {}, {}, {}"
+		in order to solve '... is not defined' errors.
+
+Unchanged:
+
+datasets.py
+models.py
+
+all the other files and folders, including the data files, were left unchanged.
