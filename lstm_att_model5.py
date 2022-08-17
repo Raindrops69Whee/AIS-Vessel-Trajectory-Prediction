@@ -38,8 +38,7 @@ class EncoderRNN(nn.Module):
                     out_features=self.hidden_size
                 ))
         lstm_input_dim = self.input_size if self.dnn_layers == 0 else self.hidden_size
-        self.rnn = nn.LSTM(
-            self.batch_size,
+        self.lstm = nn.LSTM(
             lstm_input_dim,
             self.hidden_size,
             self.layers,
@@ -53,22 +52,23 @@ class EncoderRNN(nn.Module):
             x = F.relu(getattr(self, 'dnn_'+str(i))(x))
         return x
 
-    def forward(self, inputs, hidden, input_lengths):
+    def forward(self, inputs, hidden):
+        print(inputs.size())
         if self.dnn_layers > 0:
             inputs = self.run_dnn(inputs)
-        x = rnn_utils.pack_padded_sequence(inputs, input_lengths, batch_first=True, enforce_sorted=False)
-        output, state = self.rnn(x, hidden)
-        output, _ = rnn_utils.pad_packed_sequence(output, batch_first=True, padding_value=0.)
+        output, state = self.lstm(inputs, hidden)
 
         if self.bi:
             output = output[:, :, :self.hidden_size] + output[:, :, self.hidden_size:]
         return output, state
 
-    def init_hidden(self, batch_size):
-        h0 = Variable(torch.zeros(2 if self.bi else 1, batch_size, self.hidden_size))
-        if self.gpu:
-            h0 = h0.cuda()
-        return h0
+    def init_hidden(self):
+        # h0 = Variable(torch.zeros(2 if self.bi else 1, batch_size, self.hidden_size))
+        # if self.gpu:
+        #     h0 = h0.cuda()
+        # return h0
+        return (Variable(torch.zeros(1, self.batch_size, self.hidden_size)),
+                Variable(torch.zeros(1, self.batch_size, self.hidden_size)))
 
 
 class Decoder(nn.Module):
@@ -263,12 +263,12 @@ def train(train_dataset, test_dataset, encoder, decoder, encoder_optimizer, deco
         inputs = idxs[:,:-1,:].contiguous()
         targets = idxs[:,1:,:].contiguous()
         batchsize, seqlen, _ = inputs.size()
-        encoder_hidden = encoder.init_hidden(batchsize)
+        encoder_hidden = encoder.init_hidden()
         test = inputs[0,:,:]
         input_length = inputs.size(0)
         target_length = targets.size(0)
         assert seqlen <= Config.max_seqlen, "Cannot forward, model block size is exhausted."
-        encoder_output, encoder_hidden = encoder(inputs, encoder_hidden, seqlens)
+        encoder_output, encoder_hidden = encoder(inputs, encoder_hidden)
         # for i in range(batchsize):
         #     input_tensor = idxs[i,:-1,:].contiguous()
         #     target_tensor = idxs[i,1:,:].contiguous()
