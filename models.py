@@ -1,28 +1,11 @@
-# coding=utf-8
-# Copyright 2021, Duong Nguyen
-#
-# Licensed under the CECILL-C License;
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#   http://www.cecill.info
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""Models for TrAISformer.
-    https://arxiv.org/abs/2109.03958
-
-The code is built upon:
-    https://github.com/karpathy/minGPT
+"""
+Models for Convoluted Sequence to Sequence learning.
 """
 
 import math
 import logging
 import pdb
+import sys
 
 
 import torch
@@ -30,78 +13,63 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 logger = logging.getLogger(__name__)
+device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-class CausalSelfAttention(nn.Module):
-    """
-    A vanilla multi-head masked self-attention layer with a projection at the end.
-    It is possible to use torch.nn.MultiheadAttention here but I am including an
-    explicit implementation here to show that there is nothing too scary here.
-    """
-
-    def __init__(self, config):
+class Attention(nn.Module):
+    def __init__(self):
         super().__init__()
-        assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads
-        self.key = nn.Linear(config.n_embd, config.n_embd)
-        self.query = nn.Linear(config.n_embd, config.n_embd)
-        self.value = nn.Linear(config.n_embd, config.n_embd)
-        # regularization
-        self.attn_drop = nn.Dropout(config.attn_pdrop)
-        self.resid_drop = nn.Dropout(config.resid_pdrop)
-        # output projection
-        self.proj = nn.Linear(config.n_embd, config.n_embd)
-        # causal mask to ensure that attention is only applied to the left in the input sequence
-        self.register_buffer("mask", torch.tril(torch.ones(config.max_seqlen, config.max_seqlen))
-                                     .view(1, 1, config.max_seqlen, config.max_seqlen))
-        self.n_head = config.n_head
+    
+    def forward(self, encoder_output, decoder_output, positional_embeddings, token_embeddings):
+        d=decoder_output+token_embeddings
+        z=encoder_output
+        p=positional_embeddings
+        e=token_embeddings
+        m=z.shape
+        a=F.softmax(torch.mul(d, z), dim=-1)
+        c=torch.mul(a,z+e)
+        return c
 
-    def forward(self, x, layer_past=None):
-        B, T, C = x.size()
+class Encoder(nn.Module):
+    """Just the encoder"""
 
-        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))
-        att = F.softmax(att, dim=-1)
-        att = self.attn_drop(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
-
-        # output projection
-        y = self.resid_drop(self.proj(y))
-        return y
-
-class Block(nn.Module):
-    """ an unassuming Transformer block """
-
-    def __init__(self, config):
+    def __init__(self, config, x):
         super().__init__()
-        self.ln1 = nn.LayerNorm(config.n_embd)
-        self.ln2 = nn.LayerNorm(config.n_embd)
-        self.attn = CausalSelfAttention(config)
+        self.config=config
+        self.x=x
         self.mlp = nn.Sequential(
-            nn.Linear(config.n_embd, 4 * config.n_embd),
-            nn.GELU(),
-            nn.Linear(4 * config.n_embd, config.n_embd),
+            nn.Conv1d(x.shape[1], 2*x.shape[1], 1, padding=0, device=device),
+            nn.GLU(dim=1),
             nn.Dropout(config.resid_pdrop),
         )
-
+    
     def forward(self, x):
-        x = x + self.attn(self.ln1(x))
-        x = x + self.mlp(self.ln2(x))
+        x = x + self.mlp(x)
         return x
 
-class TrAISformer(nn.Module):
-    """Transformer for AIS trajectories."""
+class Decoder(nn.Module):
+    """Just the decoder"""
+
+    def __init__(self, config, x):
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Conv1d(x.shape[1], 2*x.shape[1], 1, padding=0, device=device),
+            nn.GLU(dim=1),
+            nn.Dropout(config.resid_pdrop),
+        )
+    
+    def forward(self, x):
+        x = x + self.mlp(x)
+        return x
+    
+
+
+class conv_seq2seq(nn.Module):
+    """Convoluted sequence to sequence for AIS trajectories."""
 
     def __init__(self, config, partition_model = None):
         super().__init__()
 
+        self.config = config
         self.lat_size = config.lat_size
         self.lon_size = config.lon_size
         self.sog_size = config.sog_size
@@ -117,7 +85,6 @@ class TrAISformer(nn.Module):
         self.register_buffer(
             "emb_sizes", 
             torch.tensor([config.n_lat_embd, config.n_lon_embd, config.n_sog_embd, config.n_cog_embd]))
-        
         if hasattr(config,"partition_mode"):
             self.partition_mode = config.partition_mode
         else:
@@ -137,8 +104,6 @@ class TrAISformer(nn.Module):
                         params.fill_(1/3)
             else:
                 self.blur_module = None
-                
-        
         if hasattr(config,"lat_min"): # the ROI is provided.
             self.lat_min = config.lat_min
             self.lat_max = config.lat_max
@@ -155,7 +120,7 @@ class TrAISformer(nn.Module):
             self.mode = config.mode
         else:
             self.mode = "pos"
-    
+        
 
         # Passing from the 4-D space to a high-dimentional space
         self.lat_emb = nn.Embedding(self.lat_size, config.n_lat_embd)
@@ -166,12 +131,8 @@ class TrAISformer(nn.Module):
             
         self.pos_emb = nn.Parameter(torch.zeros(1, config.max_seqlen, config.n_embd))
         self.drop = nn.Dropout(config.embd_pdrop)
+
         
-        # transformer
-        self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
-        
-        
-        # decoder head
         self.ln_f = nn.LayerNorm(config.n_embd)
         if self.mode in ("mlp_pos","mlp"):
             self.head = nn.Linear(config.n_embd, config.n_embd, bias=False)
@@ -194,7 +155,6 @@ class TrAISformer(nn.Module):
         elif isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
-
     def configure_optimizers(self, train_config):
         """
         This long function is unfortunately doing something very simple and is being very defensive:
@@ -310,8 +270,18 @@ class TrAISformer(nn.Module):
             
         position_embeddings = self.pos_emb[:, :seqlen, :] # each position maps to a (learnable) vector (1, seqlen, n_embd)
         fea = self.drop(token_embeddings + position_embeddings)
-        fea = self.blocks(fea)
-        fea = self.ln_f(fea) # (bs, seqlen, n_embd)
+        attn=Attention()
+        self.encoder=Encoder(self.config, fea)
+        self.decoder=Decoder(self.config, fea)
+        self.z=self.encoder(fea)
+        self.h=self.decoder(fea)
+        self.p=position_embeddings
+        self.e=token_embeddings
+
+        fea=attn(self.z, self.h, self.p, self.e)
+        fea=fea+self.h
+        #fea2=fea.reshape(fea.shape[0], fea.shape[2], fea.shape[1])
+        #fea2 = self.ln_f(fea2) # (bs, seqlen, n_embd)
         logits = self.head(fea) # (bs, seqlen, full_size) or (bs, seqlen, n_embd)
         
         lat_logits, lon_logits, sog_logits, cog_logits =\
@@ -383,4 +353,3 @@ class TrAISformer(nn.Module):
             return logits, loss, loss_tuple
         else:
             return logits, loss
-        

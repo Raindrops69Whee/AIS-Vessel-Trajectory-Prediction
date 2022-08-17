@@ -31,10 +31,10 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data.dataloader import DataLoader
 from torch.nn import functional as F
 import utils
-from config_trAISformer import Config
+from config_conv_seq2seq import Config
 import os
 import matplotlib as plt
-import trAISformer as tf
+import conv_seq2seq as tf
 cf = Config()
 TB_LOG = cf.tb_log
 if TB_LOG:

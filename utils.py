@@ -25,7 +25,7 @@ import logging
 import random
 import datetime
 import socket
-
+import sys
 
 import torch
 import torch.nn as nn
@@ -45,7 +45,11 @@ def new_log(logdir,filename):
     """Defines logging format.
     """
     filename = os.path.join(logdir,
-                            datetime.datetime.now().strftime("log_%Y-%m-%d-%H-%M-%S_"+socket.gethostname()+"_"+filename+".log"))
+                            datetime.datetime.now().strftime("log_%Y-%m-%d-%H-%M-%S_"+socket.gethostname()+"_"+filename))
+    
+    #cwd = os.getcwd()
+    #filename=cwd+filename[1:]
+    #filename="r'"+sys.path[0]+filename[1:]+".log"
     logging.basicConfig(level=logging.INFO,
                         filename=filename,
                         format="%(asctime)s - %(name)s - %(message)s",
