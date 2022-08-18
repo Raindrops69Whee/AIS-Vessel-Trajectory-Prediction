@@ -67,6 +67,7 @@ class EncoderRNN(nn.Module):
         # if self.gpu:
         #     h0 = h0.cuda()
         # return h0
+        # issue here
         return (Variable(torch.zeros(1, self.batch_size, self.hidden_size)),
                 Variable(torch.zeros(1, self.batch_size, self.hidden_size)))
 
