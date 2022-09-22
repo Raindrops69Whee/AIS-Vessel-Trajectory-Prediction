@@ -1,3 +1,25 @@
+# coding=utf-8
+# Copyright 2021, Duong Nguyen
+#
+# Licensed under the CECILL-C License;
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.cecill.info
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Models for TrAISformer.
+    https://arxiv.org/abs/2109.03958
+
+The code is built upon:
+    https://github.com/karpathy/minGPT
+"""
+
 import math
 import logging
 from operator import concat
@@ -9,7 +31,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 logger = logging.getLogger(__name__)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class CausalSelfAttention(nn.Module):
     """
@@ -212,19 +234,19 @@ class TrAISformer(nn.Module):
         # separate out all parameters to those that will and won't experience regularizing weight decay
         decay = set()
         no_decay = set()
-        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d)
+        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d, torch.nn.LSTM)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
                 fpn = '%s.%s' % (mn, pn) if mn else pn # full param name
 
-                if pn.endswith('bias'):
+                if 'bias' in pn:
                     # all biases will not be decayed
                     no_decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+                elif 'weight' in pn and isinstance(m, whitelist_weight_modules):
                     # weights of whitelist modules will be weight decayed
                     decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                elif 'weight' in pn and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
@@ -317,9 +339,17 @@ class TrAISformer(nn.Module):
         position_embeddings = self.pos_emb[:, :seqlen, :] # each position maps to a (learnable) vector (1, seqlen, n_embd)
         fea = self.drop(token_embeddings + position_embeddings)
         output_fea = self.blocks(fea)
-        output_fea = self.ln_f(output_fea) # (bs, seqlen, n_embd)
-        output = torch.concat(self.lstm(self.gate(output_fea, fea)), output_fea)
+        # output_fea = self.ln_f(output_fea) # (bs, seqlen, n_embd)
+        lstm_output = self.lstm(self.gate(output_fea, fea))[0]
+        output = torch.concat((lstm_output, output_fea), 0)
+        output = self.ln_f(output)
         logits = self.head(output) # (bs, seqlen, full_size) or (bs, seqlen, n_embd)
+        print(logits.size())
+
+        # fea = self.drop(token_embeddings + position_embeddings)
+        # fea = self.blocks(fea)
+        # fea = self.ln_f(fea) # (bs, seqlen, n_embd)
+        # logits = self.head(fea) # (bs, seqlen, full_size) or (bs, seqlen, n_embd)
         
         lat_logits, lon_logits, sog_logits, cog_logits =\
             torch.split(logits, (self.lat_size, self.lon_size, self.sog_size, self.cog_size), dim=-1)
