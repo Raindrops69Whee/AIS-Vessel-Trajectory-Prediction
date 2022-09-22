@@ -257,19 +257,19 @@ class TrAISformer(nn.Module):
         # separate out all parameters to those that will and won't experience regularizing weight decay
         decay = set()
         no_decay = set()
-        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d)
+        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d, torch.nn.ModuleDict)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
                 fpn = '%s.%s' % (mn, pn) if mn else pn # full param name
 
-                if pn.endswith('bias'):
+                if 'bias' in pn:
                     # all biases will not be decayed
                     no_decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
+                elif 'weight' in pn and isinstance(m, whitelist_weight_modules):
                     # weights of whitelist modules will be weight decayed
                     decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
+                elif 'weight' in pn and isinstance(m, blacklist_weight_modules):
                     # weights of blacklist modules will NOT be weight decayed
                     no_decay.add(fpn)
 
