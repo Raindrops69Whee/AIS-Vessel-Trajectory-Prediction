@@ -341,15 +341,16 @@ class TrAISformer(nn.Module):
         output_fea = self.blocks(fea)
         # output_fea = self.ln_f(output_fea) # (bs, seqlen, n_embd)
         lstm_output = self.lstm(self.gate(output_fea, fea))[0]
-        output = torch.concat((lstm_output, output_fea), 0)
+        output = lstm_output + output_fea
         output = self.ln_f(output)
         logits = self.head(output) # (bs, seqlen, full_size) or (bs, seqlen, n_embd)
-        print(logits.size())
 
         # fea = self.drop(token_embeddings + position_embeddings)
-        # fea = self.blocks(fea)
-        # fea = self.ln_f(fea) # (bs, seqlen, n_embd)
-        # logits = self.head(fea) # (bs, seqlen, full_size) or (bs, seqlen, n_embd)
+        # output_fea = self.blocks(fea)
+        # # output_fea = self.ln_f(output_fea) # (bs, seqlen, n_embd)
+        # lstm_output = self.lstm(self.gate(output_fea, fea))[0]
+        # lstm_output = self.ln_f(lstm_output)
+        # output = lstm_output + output_fea
         
         lat_logits, lon_logits, sog_logits, cog_logits =\
             torch.split(logits, (self.lat_size, self.lon_size, self.sog_size, self.cog_size), dim=-1)
