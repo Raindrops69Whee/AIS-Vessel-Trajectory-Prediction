@@ -282,7 +282,7 @@ class TrAISformer(nn.Module):
         sog_embeddings = self.sog_emb(inputs[:, :, 2])
         cog_embeddings = self.cog_emb(inputs[:, :, 3])
         token_embeddings = torch.cat((lat_embeddings, lon_embeddings, sog_embeddings, cog_embeddings), dim=-1)
-        lstm = torch.nn.LSTM(self.config.n_embd, hidden_size=self.config.n_embd, num_layers=1, bidirectional=False)
+        lstm = torch.nn.LSTM(self.config.n_embd, hidden_size=self.config.n_embd, num_layers=1, bidirectional=False, device=self.config.device)
 
         position_embeddings = lstm(token_embeddings)[0] # each position maps to a (learnable) vector (1, seqlen, n_embd)
         fea = self.drop(token_embeddings + position_embeddings)
