@@ -1,0 +1,9 @@
+Method 6.
+
+Currently tested: trans(x)+dense(x) --- Slightly less accurate
+			     trans(x)+dense(trans(x)) --- Most accurate so far
+
+Untested:	     x+dense(trans(x)) --- Not sure if this is even a good idea here
+
+Combines multiple convolutional layers and uses batchnorm to form a dense layer, which is then stacked into a dense block.
+Each layer can reference the previous layer(we simulate this using element-wise tensor addition)
