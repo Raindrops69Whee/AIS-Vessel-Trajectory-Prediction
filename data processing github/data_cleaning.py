@@ -182,6 +182,8 @@ for i in sorted_data:
         temp+=1
 
 #Rewrite the data into pkl file
+with open("./ais-processed-log-2019-03.pkl", "wb") as f:
+    data=pkl.dump(str(sorted_data_final))
 
 end=dt.datetime.now()
 time_taken=end-start
