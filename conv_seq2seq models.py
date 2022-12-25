@@ -19,8 +19,9 @@ class Attention(nn.Module):
     def __init__(self):
         super().__init__()
     
-    def forward(self, encoder_output, decoder_output, positional_embeddings, token_embeddings):
-        d=decoder_output+token_embeddings
+    def forward(self, encoder_output, decoder_output, positional_embeddings, token_embeddings, target_embeddings):
+        lin=nn.Linear(decoder_output.shape[-1], target_embeddings.shape[-1])
+        d=lin(decoder_output)+target_embeddings
         z=encoder_output
         p=positional_embeddings
         e=token_embeddings
@@ -250,6 +251,7 @@ class conv_seq2seq(nn.Module):
         if with_targets:
             inputs = idxs[:,:-1,:].contiguous()
             targets = idxs[:,1:,:].contiguous()
+            dec_targets = idxs[:,1:,:].contiguous()
             targets_uniform = idxs_uniform[:,1:,:].contiguous()
             inputs_real = x[:,:-1,:].contiguous()
             targets_real = x[:,1:,:].contiguous()
@@ -265,20 +267,29 @@ class conv_seq2seq(nn.Module):
         lat_embeddings = self.lat_emb(inputs[:,:,0]) # (bs, seqlen, lat_size)
         lon_embeddings = self.lon_emb(inputs[:,:,1]) 
         sog_embeddings = self.sog_emb(inputs[:,:,2]) 
-        cog_embeddings = self.cog_emb(inputs[:,:,3])      
+        cog_embeddings = self.cog_emb(inputs[:,:,3])
         token_embeddings = torch.cat((lat_embeddings, lon_embeddings, sog_embeddings, cog_embeddings),dim=-1)
-            
+        if with_targets:
+            dec_lat_embeddings = self.lat_emb(targets[:,:,0]) # (bs, seqlen, lat_size)
+            dec_lon_embeddings = self.lon_emb(targets[:,:,1]) 
+            dec_sog_embeddings = self.sog_emb(targets[:,:,2]) 
+            dec_cog_embeddings = self.cog_emb(targets[:,:,3])       
+            dec_token_embeddings = torch.cat((dec_lat_embeddings, dec_lon_embeddings, dec_sog_embeddings, dec_cog_embeddings),dim=-1)
         position_embeddings = self.pos_emb[:, :seqlen, :] # each position maps to a (learnable) vector (1, seqlen, n_embd)
         fea = self.drop(token_embeddings + position_embeddings)
         attn=Attention()
         self.encoder=Encoder(self.config, fea)
-        self.decoder=Decoder(self.config, fea)
         self.z=self.encoder(fea)
-        self.h=self.decoder(fea)
+        if not with_targets:
+            dec_targets=self.z
+        else:
+            dec_targets = self.drop(dec_token_embeddings + position_embeddings)
+        self.decoder=Decoder(self.config, dec_targets)
+        self.h=self.decoder(dec_targets)
         self.p=position_embeddings
         self.e=token_embeddings
 
-        fea=attn(self.z, self.h, self.p, self.e)
+        fea=attn(self.z, self.h, self.p, self.e, dec_targets)
         fea=fea+self.h
         #fea2=fea.reshape(fea.shape[0], fea.shape[2], fea.shape[1])
         #fea2 = self.ln_f(fea2) # (bs, seqlen, n_embd)
