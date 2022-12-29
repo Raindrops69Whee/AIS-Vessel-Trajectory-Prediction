@@ -8,19 +8,20 @@ import shapefile
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import pytz
-from splitter import Splitter
+import splitter
 
 from data_processing import Processor
 start=dt.datetime.now()
 p=Processor()
 
 # res=p.json_to_pkl("./ais-processed-log-2019-03.json", "./ais-processed-log-2019-03.pkl")
-datas_raw=[p.process(["./data/SG/2021/ais-processed-log-2021-0" +str(i)+".json" if i<10 else "./data/SG/2021/ais-processed-log-2021-" +str(i)+".json" for i in range(1, 13)], multiple_files=True)]
-datas_raw.append(p.process(["./data/SG/2020/ais-processed-log-2020-0" +str(i)+".json" if i<10 else "./data/SG/2020/ais-processed-log-2020-" +str(i)+".json" for i in range(1, 13)], multiple_files=True))
 # datas=p.process(["./data/SG/2021/ais-processed-log-2021-0"+str(i)+".json" for i in range(1,3)], multiple_files=True)
 # with open("./ais-processed-log-2019-03.pkl", "rb") as f:
 #     data=pkl.load(f)
-for datas in datas_raw:
+datas=[]
+for some_value in range(1,2):
+    datas=p.process(["./data/SG/202"+str(some_value)+"/ais-processed-log-202"+str(some_value)+"-0" +str(i)+".json" if i<10 else "./data/SG/202"+str(some_value)+"/ais-processed-log-202"+str(some_value)+"-" +str(i)+".json" for i in range(1, 13)], multiple_files=True)
+    # datas=p.process(["./data/SG/202"+str(some_value)+"/ais-processed-log-202"+str(some_value)+"-0" +str(i)+".json" for i in range(1, 7)], multiple_files=True)
     for filename in datas.keys():
         aistype5data=[]
         data=datas[filename]
@@ -204,14 +205,17 @@ for datas in datas_raw:
         #Rewrite the data into pkl file
         with open("./data/pkl/"+filename.split('/')[-1][:-4]+"pkl", "wb") as f:
             pkl.dump(sorted_data_final, f)
+    objects = dir()
 
-filenames_2020=["./data/pkl/ais-processed-log-2020-0" +str(i)+".pkl" if i<10 else "./data/pkl/ais-processed-log-2020-" +str(i)+".pkl" for i in range(1, 13)]
+    for obj in objects:
+        if not obj.startswith("__") and not obj.startswith("p") and not obj.startswith("s"):
+            del globals()[obj]
+
+# filenames_2020=["./data/pkl/ais-processed-log-2020-0" +str(i)+".pkl" if i<10 else "./data/pkl/ais-processed-log-2020-" +str(i)+".pkl" for i in range(1, 13)]
 filenames_2021=["./data/pkl/ais-processed-log-2021-0" +str(i)+".pkl" if i<10 else "./data/pkl/ais-processed-log-2021-" +str(i)+".pkl" for i in range(1, 13)]
-
-splitter=Splitter()
-
-splitter(filenames_2020)
-splitter(filenames_2021)
+splitter=splitter.Splitter()
+# Splitter(filenames_2020)
+splitter.forward(filenames_2021)
 
 end=dt.datetime.now()
 time_taken=end-start

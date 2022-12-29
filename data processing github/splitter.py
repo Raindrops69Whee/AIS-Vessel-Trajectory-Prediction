@@ -94,10 +94,8 @@ class Splitter:
                     break
             sets=[{"train":data[:splits[0]+1]}, {"valid":data[splits[0]+1:splits[1]+1]}, {"test":data[splits[1]+1:]}]
             for i in sets:
-                with open(filenames[x].replace(".pkl", "-"+"0"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl" if x<8 else "-"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl").replace("data/pkl", "data/datasets/yearly"), "wb") as f:
+                with open(filenames[x].replace(".pkl", "-"+"0"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl" if x<8 else "-"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl").replace("data/pkl", "data/datasets/half_yearly"), "wb") as f:
                     pkl.dump(i[list(i.keys())[0]], f)
-
-
         # By year
         data=[]
         for x in filenames:
@@ -123,5 +121,5 @@ class Splitter:
                 break
         sets=[{"train":data[:splits[0]+1]}, {"valid":data[splits[0]+1:splits[1]+1]}, {"test":data[splits[1]+1:]}]
         for i in sets:
-            with open(filenames[0].replace("-01", "_"+list(i.keys())[0]).replace("data/pkl", "data/datasets"), "wb") as f:
+            with open(filenames[0].replace("-01", "_"+list(i.keys())[0]).replace("data/pkl", "data/datasets/yearly"), "wb") as f:
                 pkl.dump(i[list(i.keys())[0]], f)
