@@ -43,6 +43,7 @@ class Attention(nn.Module):
         hidden_dec = hidden_dec[-1, :, :].unsqueeze(1).repeat(1, src_seq_len, 1)         #[b, src_seq_len, n_hidden_dec]
 
         tanh_W_s_h = torch.tanh(self.W(torch.cat((hidden_dec, last_layer_enc), dim=2)))  #[b, src_seq_len, n_hidden_dec]
+
         tanh_W_s_h = tanh_W_s_h.permute(0, 2, 1)       #[b, n_hidde_dec, seq_len]
         
         V = self.V.repeat(batch_size, 1).unsqueeze(1)  #[b, 1, n_hidden_dec]
@@ -105,7 +106,7 @@ class EncoderRNN(nn.Module):
 
 class Decoder(nn.Module):
     
-    def __init__(self, n_output, n_embed, n_hidden_enc, n_hidden_dec, n_layers=1, dropout=0.1):
+    def __init__(self, n_embed, n_hidden_enc, n_hidden_dec, n_output = 1, n_layers=2, dropout=0.1):
         super().__init__()
 
         self.n_output = n_output
@@ -124,7 +125,7 @@ class Decoder(nn.Module):
     
     def forward(self, target, hidden_dec, last_layer_enc):
         ''' 
-            target:         [b] 
+            target:         [b, n_embed] 
             hidden_dec:     [b, n_layers, n_hidden_dec]      (1st hidden_dec = encoder's last_h's last layer)
             last_layer_enc: [b, seq_len, n_hidden_enc * 2]   (* 2 since bi-directional)  
             --> not to be confused with encoder's last hidden state. last_layer_enc is ALL hidden states (of timesteps 0,1,...,t-1) of the last LAYER.
@@ -132,8 +133,6 @@ class Decoder(nn.Module):
         
         ######################## 1. TARGET EMBEDDINGS ######################### 
         embedded_trg = target.unsqueeze(1) #[b, 1] : since n_output = 1
-
-        print(embedded_trg.shape)
 
 
         ################## 2. CALCULATE ATTENTION WEIGHTS #####################      
@@ -147,10 +146,10 @@ class Decoder(nn.Module):
         
         ############################# 4. GRU LAYER ############################
         lstm_input = torch.cat((embedded_trg, weighted_sum), dim=2) #[b, 1, n_embed + n_hidden_enc*2]
-
         last_layer_dec, last_h_dec = self.lstm(lstm_input, hidden_dec)
         # last_layer_dec: [b, trg_seq_len, n_hidden_dec]
-        last_h_dec = last_h_dec.permute(1, 0, 2)  #[b, n_layers, n_hidden_dec]
+
+        # last_h_dec = (last_h_dec[0].permute(1, 0, 2), last_h_dec[1].permute(1, 0, 2))  #[b, n_layers, n_hidden_dec]
         
         
         ########################### 5. FINAL FC LAYER #########################
@@ -457,7 +456,7 @@ class lstm_att(nn.Module):
         position_embeddings = self.pos_emb[:, :seqlen, :] # each position maps to a (learnable) vector (1, seqlen, n_embd)
         fea = self.drop(token_embeddings + position_embeddings)
         self.encoder = EncoderRNN(32, 768)
-        self.decoder = Decoder(768,768,768,768)
+        self.decoder = Decoder(768,768,768)
         encoder_hidden = self.encoder.initHidden()
         encoder_output, encoder_hidden = self.encoder(fea, encoder_hidden)
         if not with_targets:
@@ -470,21 +469,20 @@ class lstm_att(nn.Module):
         trg_seq_len = dec_targets.size(1)
         
         b = inputs.size(0)
-        output = dec_targets[:, 0]
-        print(output.shape)
+        output = dec_targets[:, 0, :]
         n_output = 768
         
-        outputs = torch.zeros(b, n_output, trg_seq_len)
-        
+        outputs = torch.zeros(b, trg_seq_len, n_output)
         for t in range(1, trg_seq_len, 1):
-            output, decoder_hidden = self.decoder(output, decoder_hidden, encoder_output)
-            outputs[:, :, t] = output #output: [b, n_output]
+            output, decoder_hidden, attn_weights = self.decoder(output, decoder_hidden, encoder_output)
+            outputs[:, t, :] = output #output: [b, n_output]
 
-            if random.random() < 0.5:
-                output = targets[:, t]
-                
-            else:
-                output = output.max(dim=1)[1]
+            # if random.random() < 0.5:
+            output = dec_targets[:, t]
+            # else:
+            #     output = output.max(dim=2)[1]
+            #     print("no shesh")
+            #     print(output.shape)
         # attn_weights = self.attention(decoder_hidden[0], encoder_output)
         # decoder_output, decoder_hidden, decoder_attention = self.decoder(dec_targets, decoder_hidden[0], encoder_output, attn_weights)
         self.p=position_embeddings
