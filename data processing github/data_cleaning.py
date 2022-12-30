@@ -1,11 +1,14 @@
 import pickle as pkl
 import datetime as dt
-import pandas
-from math import *
+import pandas as pd
+import geopandas as gpd
+import movingpandas as mpd
+from fiona.crs import from_epsg
+from shapely.geometry import Point
 from haversine import *
 import vptree
 import shapefile
-import numpy as np
+# import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 import pytz
 import splitter
@@ -55,13 +58,13 @@ for some_value in range(1,2):
                 # sorted_data.append({"mmsi": i["mmsi"], "traj": [[i["lat"], i["lon"], i["speed"], i["course"]]]})#rearrange the parameters as needed
                 temp_dict = {key: val for key, val in i.items() if key != "mmsi"}
                 time=temp_dict["time"]
-                temp_dict["time"]=pandas.to_datetime(time)
+                temp_dict["time"]=pd.to_datetime(time)
                 sorted_data.append({"mmsi":i["mmsi"], "data": [temp_dict]})
             else:
                 # sorted_data[val]["traj"].append([i["lat"], i["lon"], i["speed"], i["course"]])
                 temp_dict = {key: val for key, val in i.items() if key != "mmsi"}
                 time=temp_dict["time"]
-                temp_dict["time"]=pandas.to_datetime(time)
+                temp_dict["time"]=pd.to_datetime(time)
                 sorted_data[val]["data"].append(temp_dict)
             prev_mmsi=curr_mmsi
 
@@ -150,7 +153,7 @@ for some_value in range(1,2):
                 i["data"].pop(j)
 
         #Down-sample AIS trajectory data with a sampling rate of 10-minute.
-        for i in sorted_data:
+        '''for i in sorted_data:
             rem=[]
             curr_timestamp=i["data"][0]["time"]
             for j in range(1, len(i["data"])):
@@ -159,7 +162,39 @@ for some_value in range(1,2):
                 else:
                     curr_timestamp=i["data"][j]["time"]
             for j in rem[::-1]:
-                i["data"].pop(j)
+                i["data"].pop(j)'''
+        for i in sorted_data:
+            df=pd.DataFrame([{'geometry':Point(i["data"][j]["lat"], i["data"][j]["lon"]), 't':i["data"][j]["time"]} for j in range(len(i["data"]))]).set_index('t')
+            gdf = gpd.GeoDataFrame(df, crs=from_epsg(31256))
+            traj = mpd.Trajectory(gdf, 1)
+            traj.add_speed(False, 'sog')
+            traj.add_direction(False, 'cog')
+            new=[]
+            mmsi=i["mmsi"]
+            for j in range((i["data"][-1]["time"]-i["data"][0]["time"]).total_seconds()//600+1):
+                lat, lon = traj.get_position_at(i["data"][0]["time"] + dt.timedelta(seconds=600 * j)).x, traj.get_position_at(i["data"][0]["time"] + dt.timedelta(seconds=600 * j)).y
+                # nearest_point=traj.get_position_at(i["data"][0]["time"] + dt.timedelta(seconds=600 * j), method='nearest')  #Nearest point
+                for k in range(len(i["data"])):
+                    if (i["data"][k]["time"]-i["data"][0]["time"]-dt.timedelta(seconds=600 * j)).total_seconds()>0:
+                        t1=i["data"][k-1]["time"]  #Empirical speed between the two original points(for which the new point is between)
+                        t2=i["data"][k]["time"]  #Empirical speed between the two original points(for which the new point is between)
+                        break
+                    # if (i["data"][k]["lat"]==nearest_point.x and i["data"][k]["lon"]==nearest_point.y): #Nearest point
+                    #     sog=i["data"][k]["speed"]  #Nearest point
+                    #     cog=i["data"][k]["course"]  #Nearest point
+                    #     break  #Nearest point
+                p1=traj.get_segment_between(t1, t2).get_start_location()  #Empirical speed between the two original points(for which the new point is between)
+                p2=traj.get_segment_between(t1, t2).get_end_location()  #Empirical speed between the two original points(for which the new point is between)
+                sog=haversine((p1.x, p1.y), (p2.x, p2.y), unit=Unit.NAUTICAL_MILES)*3600/(t2-t1).total_seconds()  #Empirical speed between the two original points(for which the new point is between)
+                cog=traj.get_segment_between(t1, t2).get_direction()
+                new.append({"mmsi:": mmsi, "speed": sog, "lon": lon, "lat": lat, "course": cog, "time": i["data"][0]["time"] + dt.timedelta(seconds=600 * j)})
+                #{"mmsi":563848000,"speed":0.2,"lon":103.71180,"lat":1.22156,"course":218.0,"time":"2021-01-01T00:00:17Z"}
+        for i in sorted_data:
+            keep=[]
+            curr_timestamp=i["data"][0]["time"]
+            end_timestamp=i["data"][-1]["time"]
+            while curr_timestamp<end_timestamp:
+                pass
 
         #Split long trajectories to shorter ones with the maximum sequence length of T + L(split trajectories into ones that are of length [3+(3~17)]hrs. Given T+1 points, predict pos L timesteps later).
         for i in range(len(sorted_data)):
@@ -208,13 +243,13 @@ for some_value in range(1,2):
     objects = dir()
 
     for obj in objects:
-        if not obj.startswith("__") and not obj.startswith("p") and not obj.startswith("s"):
+        if not obj.startswith("__") and not obj.startswith("p") and not obj.startswith("s") and not obj.startswith("dt"):
             del globals()[obj]
 
 # filenames_2020=["./data/pkl/ais-processed-log-2020-0" +str(i)+".pkl" if i<10 else "./data/pkl/ais-processed-log-2020-" +str(i)+".pkl" for i in range(1, 13)]
 filenames_2021=["./data/pkl/ais-processed-log-2021-0" +str(i)+".pkl" if i<10 else "./data/pkl/ais-processed-log-2021-" +str(i)+".pkl" for i in range(1, 13)]
 splitter=splitter.Splitter()
-# Splitter(filenames_2020)
+# splitter.forward(filenames_2020)
 splitter.forward(filenames_2021)
 
 end=dt.datetime.now()

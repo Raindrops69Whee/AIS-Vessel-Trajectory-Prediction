@@ -4,8 +4,6 @@ import pickle as pkl
 #     data=pkl.load(f)
 # with open("./ct_dma_train.pkl", "rb") as f:
 #     data3=pkl.load(f)
-with open("./data/pkl/ais-processed-log-2021-01.pkl", "rb") as f:
-    data2=pkl.load(f)
 # lst, lst3=[],[]
 #
 # for i in data:
@@ -15,5 +13,7 @@ with open("./data/pkl/ais-processed-log-2021-01.pkl", "rb") as f:
 #
 # print(max(lst), max(lst3))
 # print(len(data), len(data3))
-
-print(data2[:5])
+for i in range(1,10):
+    with open("./data/pkl/ais-processed-log-2021-0"+str(i)+".pkl", "rb") as f:
+        data2=pkl.load(f)
+    print(data2[0])

@@ -68,11 +68,12 @@ class Splitter:
 
 
         # Half a year(6 months)
-        data=[]
         for x in range(0, len(filenames), 6):
-            files=[filenames[x+i] for i in range(6)]
+            data=[]
+            files=[filenames[x+m] for m in range(6)]
             for i in files:
-                with open(i, "wb") as f:
+                with open(i, "rb") as f:
+                    print(x)
                     data+=pkl.load(f)
             total_seq_len=0
             for i in data:
@@ -96,6 +97,8 @@ class Splitter:
             for i in sets:
                 with open(filenames[x].replace(".pkl", "-"+"0"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl" if x<8 else "-"+ str(x+6)+"_"+str(list(i.keys())[0])+".pkl").replace("data/pkl", "data/datasets/half_yearly"), "wb") as f:
                     pkl.dump(i[list(i.keys())[0]], f)
+            if len(filenames)!=12:
+                break
         # By year
         data=[]
         for x in filenames:
