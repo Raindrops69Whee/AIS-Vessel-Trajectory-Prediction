@@ -88,11 +88,11 @@ class Decoder(nn.Module):
         lstm_input = torch.cat((embedded_trg, weighted_sum), dim=2)
         last_layer_dec, last_h_dec = self.lstm(lstm_input, hidden_dec)
         
-        fc_in = torch.cat((embedded_trg.squeeze(1),           #[b, n_embed]
-                           weighted_sum.squeeze(1),           #[b, n_hidden_enc*2]
-                           last_layer_dec.squeeze(1)), dim=1) #[b, n_hidden_dec]                           
-                           
-        output = self.fc_final(fc_in) #[b, n_output]
+        fc_in = torch.cat((embedded_trg.squeeze(1),
+                           weighted_sum.squeeze(1),
+                           last_layer_dec.squeeze(1)), dim=1)
+        
+        output = self.fc_final(fc_in)
         
         return output, last_h_dec, att_weights
 
